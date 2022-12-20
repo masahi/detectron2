@@ -60,7 +60,7 @@ def assign_boxes_to_levels(
 
 
 # script the module to avoid hardcoded device type
-@torch.jit.script_if_tracing
+# @torch.jit.script_if_tracing
 def _convert_boxes_to_pooler_format(boxes: torch.Tensor, sizes: torch.Tensor) -> torch.Tensor:
     sizes = sizes.to(device=boxes.device)
     indices = torch.repeat_interleave(
@@ -98,7 +98,7 @@ def convert_boxes_to_pooler_format(box_lists: List[Boxes]):
     return _convert_boxes_to_pooler_format(boxes, sizes)
 
 
-@torch.jit.script_if_tracing
+# @torch.jit.script_if_tracing
 def _create_zeros(
     batch_target: Optional[torch.Tensor],
     channels: int,

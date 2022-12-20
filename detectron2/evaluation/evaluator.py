@@ -10,7 +10,9 @@ from torch import nn
 
 from detectron2.utils.comm import get_world_size, is_main_process
 from detectron2.utils.logger import log_every_n_seconds
-
+from detectron2.export import (
+    dump_torchscript_IR,
+)
 
 class DatasetEvaluator:
     """
@@ -100,6 +102,16 @@ class DatasetEvaluators(DatasetEvaluator):
         return results
 
 
+class TraceWrapper(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model.to("cpu")
+
+    def forward(self, inp):
+        out = self.model.inference([{"image": inp}], do_postprocess=False)[0]
+        return (out.pred_boxes.tensor, out.scores, out.pred_classes)
+
+
 def inference_on_dataset(
     model, data_loader, evaluator: Union[DatasetEvaluator, List[DatasetEvaluator], None]
 ):
@@ -140,6 +152,9 @@ def inference_on_dataset(
     total_data_time = 0
     total_compute_time = 0
     total_eval_time = 0
+
+    wrapper = TraceWrapper(model)
+
     with ExitStack() as stack:
         if isinstance(model, nn.Module):
             stack.enter_context(inference_context(model))
@@ -154,8 +169,23 @@ def inference_on_dataset(
                 total_compute_time = 0
                 total_eval_time = 0
 
+            trace_inp = inputs[0]["image"].to("cpu")
+
+            with torch.no_grad():
+                # out = wrapper(trace_inp)
+                ts_model = torch.jit.trace(wrapper, (trace_inp,))
+
+            import os
+            os.makedirs("out", exist_ok=True)
+
+            with open("out/model.ts", "wb") as f:
+                torch.jit.save(ts_model, f)
+                dump_torchscript_IR(ts_model, "out")
+                assert False
+
             start_compute_time = time.perf_counter()
             outputs = model(inputs)
+
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
             total_compute_time += time.perf_counter() - start_compute_time
