@@ -153,7 +153,22 @@ def inference_on_dataset(
     total_compute_time = 0
     total_eval_time = 0
 
-    wrapper = TraceWrapper(model)
+    wrapper = TraceWrapper(model.eval())
+
+    import numpy as np
+    trace_inp = torch.from_numpy(np.load("trace_input.npy"))
+
+    with torch.no_grad():
+        # out = wrapper(trace_inp)
+        ts_model = torch.jit.trace(wrapper, (trace_inp,))
+
+    import os
+    os.makedirs("out", exist_ok=True)
+
+    with open("out/model.ts", "wb") as f:
+        torch.jit.save(ts_model, f)
+        dump_torchscript_IR(ts_model, "out")
+        assert False
 
     with ExitStack() as stack:
         if isinstance(model, nn.Module):
